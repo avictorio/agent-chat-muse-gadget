@@ -16,10 +16,7 @@ $file = $null
 try {
   $t = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Trim()
   if ($t -cnotmatch '^mgst_[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$') { throw "That isn't an SDK token (it should start with mgst_); copy it again from gadgets.muse.ai." }
-  if (-not (Test-Path $drop)) { New-Item -ItemType Directory $drop | Out-Null }
-  $ErrorActionPreference = 'Continue'
-  icacls $drop /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'operator:(OI)(CI)M' 'muse-gadget:(OI)(CI)M' | Out-Null
-  $ErrorActionPreference = 'Stop'
+  if (-not (Test-Path $drop)) { throw "$drop is missing: rerun windows/setup-account.ps1 (elevated)." }
   $file = Join-Path $drop "$([guid]::NewGuid().ToString('N')).tok"
   [IO.File]::WriteAllText($file, "$t`n", (New-Object Text.ASCIIEncoding)); $t = $null
 } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }

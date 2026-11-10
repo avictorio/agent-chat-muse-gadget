@@ -7,14 +7,15 @@
 #   2. The runner: task `muse-gadget-runner`, at startup, as muse-gadget, polling C:\ProgramData\muse-gadget\runner\queue
 #      (windows/run-as-gadget.ps1 queues a job and reads the result). Only operator, Administrators and SYSTEM can
 #      change the loop; muse-gadget can write the queue (its job results). C:\ProgramData\muse-gadget\stage is where
-#      operator puts the Linux scripts that windows/in-distro.ps1 pipes into the distro (muse-gadget reads only).
+#      operator puts the Linux scripts that windows/in-distro.ps1 pipes into the distro (muse-gadget reads only);
+#      token-drop is windows/set-token.ps1's one-second handover (operator and muse-gadget only, not Administrators).
 #   3. With -KeepAlive (once the distro exists): task `muse-gadget-keepalive`, at startup, as muse-gadget, holding
 #      `wsl.exe -d muse-gadget --exec /bin/sleep infinity` so WSL doesn't stop the idle distro (step A8).
 param([switch]$KeepAlive, [switch]$Remove, [string]$LogPath)
 $ErrorActionPreference = 'Stop'
 if ($LogPath) { Start-Transcript -Path $LogPath -Force | Out-Null }
 $acct = 'muse-gadget'; $distro = 'muse-gadget'
-$root = 'C:\ProgramData\muse-gadget'; $bin = "$root\bin"; $queue = "$root\runner\queue"; $stage = "$root\stage"
+$root = 'C:\ProgramData\muse-gadget'; $bin = "$root\bin"; $queue = "$root\runner\queue"; $stage = "$root\stage"; $drop = "$root\token-drop"
 $runTask = 'muse-gadget-runner'; $keepTask = 'muse-gadget-keepalive'
 
 function Get-RightLine([string]$right) {   # secedit exports resolvable accounts by name, others as *SID
@@ -80,12 +81,13 @@ try {
   New-Item $ul -Force | Out-Null; Set-ItemProperty $ul -Name $acct -Value 0 -Type DWord
 
   Write-Host 'The runner'
-  New-Item -ItemType Directory -Force $bin, $queue, $stage | Out-Null
+  New-Item -ItemType Directory -Force $bin, $queue, $stage, $drop | Out-Null
   $ErrorActionPreference = 'Continue'
   icacls $root /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' "operator:(OI)(CI)RX" "${acct}:(RX)" | Out-Null
   icacls $bin /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' 'operator:(OI)(CI)RX' "${acct}:(OI)(CI)RX" | Out-Null
   icacls "$root\runner" /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' 'operator:(OI)(CI)RX' "${acct}:(RX)" | Out-Null
   icacls $queue /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' 'operator:(OI)(CI)M' "${acct}:(OI)(CI)M" | Out-Null
+  icacls $drop /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'operator:(OI)(CI)M' "${acct}:(OI)(CI)M" | Out-Null
   icacls $stage /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' 'operator:(OI)(CI)M' "${acct}:(OI)(CI)RX" | Out-Null
   $ErrorActionPreference = 'Stop'
   Copy-Item (Join-Path $PSScriptRoot 'runner-loop.ps1') $bin -Force
