@@ -1,0 +1,6 @@
+*.log
+*.tok
+sdk_token
+identity.json
+pairing.json
+*.bak
