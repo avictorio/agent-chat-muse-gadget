@@ -29,6 +29,8 @@ for line in sys.stdin:
 '
   echo "== REST messages?limit=2"
   curl -sS -m 30 -H @"$hdr" "$origin/api/rooms/$room/messages?limit=2" </dev/null | python3 -c "$shape" rest
+  echo "== REST games (live first, then recent finished)"
+  curl -sS -m 30 -H @"$hdr" "$origin/api/rooms/$room/games" </dev/null | python3 -c "$shape" rest
   echo "== stream for ${secs}s (live frames only)"
   curl -sS -N -m "$secs" -H @"$hdr" "$origin/api/rooms/$room/stream?after=999999999&events=all" </dev/null | python3 -c "$shape"
   return 0

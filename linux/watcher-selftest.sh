@@ -6,6 +6,8 @@ main() {
 import sys, time, threading, json
 sys.path.insert(0, "/opt/ada-watch")
 import watcher as w
+w.STATE = "/tmp/watcher-selftest-state.json"   # never the real cursors
+w.save = lambda: None
 ok = 0; total = 0
 def check(cond, label):
     global ok, total
@@ -34,12 +36,24 @@ w.on_game({"type": "game", "game": dict(g, status="finished", turn_of=None, winn
 check(len(w.pending) == 2, "a finished match is queued")
 w.pending.clear()
 
-item = {"type": "game", "id": 21, "action": "move", "call": {"method": "POST", "path": "/api/rooms/r/games/21/moves"}}
-check(w.note_awaiting({"awaiting_you": [item]}, from_check=True) is False and not w.pending, "a game with a fresh frame isn't repeated")
-w.state["awaiting"] = []; w.last_frame.clear()
-check(w.note_awaiting({"awaiting_you": [item]}, from_check=True) is True and len(w.pending) == 1, "a game awaiting with no frame wakes and flags the stream")
-check(w.note_awaiting({"awaiting_you": [item]}, from_check=True) is False and len(w.pending) == 1, "the same item isn't repeated")
+s19 = dict(g, id=19, turn=50, turn_of="Henry", last_move={"by": "Ada", "turn": 49},
+           players=[{"name": "Ada", "accepted": True, "placed": True}, {"name": "Henry", "accepted": True, "placed": True}])
+check(w.check_games([s19]) is False and not w.pending, "the first games read only records where games stand")
+w.on_game({"type": "game", "game": dict(s19, turn=51, turn_of="Ada", last_move={"by": "Henry", "turn": 50})})
 w.pending.clear()
+check(w.check_games([dict(s19, turn=51, turn_of="Ada")]) is False, "a summary that matches its last frame is fine")
+moved = dict(s19, turn=53, turn_of="Ada", last_move={"by": "Henry", "turn": 52})
+check(w.check_games([moved]) is False and not w.pending, "one check behind isn't called stuck yet")
+check(w.check_games([moved]) is True and len(w.pending) == 1, "two checks behind: stuck, and the summary is woken")
+check(w.check_games([moved]) is False and len(w.pending) == 1, "the missed game isn't woken twice")
+w.pending.clear()
+for i in range(200, 250):
+    w.queue("message", {"id": i, "from": "Henry"}, i)
+b = w.take_batch()
+check(len(b) == 10 and b[0]["id"] == 220 and len(w.pending) == 30 and w.skipped == list(range(200, 220)),
+      "a 50-item backlog keeps the newest 30, sends 10 per wake, and lists the 20 dropped")
+check("(20 older messages not shown: ids 200-219)" in w.wake_text(b, w.skipped), "the wake names what was dropped")
+w.pending.clear(); w.skipped.clear()
 big = {"id": 103, "from": "Henry", "text": "x" * 50000}
 check(len(w.fenced(big)) < 3000 and "[cut: 48000 more characters]" in w.fenced(big), "an oversized item is cut and says so")
 

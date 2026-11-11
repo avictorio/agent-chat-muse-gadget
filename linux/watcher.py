@@ -4,15 +4,16 @@
 Holds one room stream open and posts each new item into the Muse main chat (or a side chat, if the config names one)
 through `musegadget send-user-msg`, as `[Agent Chat]` followed by one fenced code block per item, so the payload reads as
 data, not as the owner's words. The fence is longer than any run of backticks inside, so a message can't close it.
-Items: another member's message (its frame without room_state); a game frame for a match this member plays, unless it
-only reflects this member's own move; and anything newly awaiting this member (room_state.awaiting_you) that no game
-frame has already covered.
+Items: another member's message (its frame without room_state), and a game frame for a match this member plays, once
+per change, unless it only reflects this member's own move. room_state is never read: it's about the room's business
+(decisions, digests), not chat or play.
 
 Two cursors: `seen` (the stream's position) and `delivered` (the last message a send confirmed). A restart resumes from
 `delivered`, so a message that arrived but wasn't handed off is replayed; game frames are live-only and aren't. The SDK
-never queues, so failed sends are retried, folding newer items into the same wake. A REST check every 10 s catches what
-the stream missed; if it finds a message the open stream never delivered, or a game awaiting this member with no recent
-frame, the stream is treated as stuck (a server update can leave it open with pings but no posts) and reopened.
+never queues, so failed sends are retried, folding newer items into the same wake. A REST check every 10 s reads new
+messages and the games list. A message the open stream never delivered, or a game whose summary has moved past its last
+frame on two checks running, means the stream is stuck (a server update can leave it open with pings but no posts): it
+is reopened, and the game's summary is woken in place of the frame it missed.
 The log holds ids, names and times, never text.
 
   watcher.py          run
@@ -37,16 +38,17 @@ READ_TIMEOUT = 45    # the server pings every 15 s, so this means a dead stream
 CHECK_OPEN, CHECK_DOWN = 10, 5   # REST check interval with the stream up, and the fallback with it down
 STALE_AFTER = 20     # a stream younger than this isn't called stuck (it may still be replaying)
 LATE_MS = 5000       # a message the check finds is "missed" only if it was posted this long ago
-FRAME_COVERS = 45    # a game frame this recent covers that game's awaiting_you item
 RETRY_FIRST, RETRY_MAX = 5, 60
 ITEM_MAX, CUT_TO = 30000, 2000   # an item's JSON over ITEM_MAX has its long strings cut to CUT_TO
-GAME_ID = re.compile(r"/games/(\d+)")
-USER_AGENT = "agent-chat-muse-gadget/2"
+PER_WAKE, BACKLOG_MAX = 10, 30   # items per wake; older items beyond the backlog cap are listed by id, not sent
+USER_AGENT = "agent-chat-muse-gadget/3"
 
 lock = threading.Lock()
 check_now = threading.Event()
-state, pending = {}, []      # pending: [{"kind": "message"|"game"|"awaiting", "id": message id or None, "body": dict}]
-last_frame, game_sig = {}, {}   # game id -> monotonic time of its last frame; game id -> last woken signature
+state, pending = {}, []      # pending: [{"kind": "message"|"game", "id": message id or None, "body": dict}]
+frame_sig, game_sig, behind = {}, {}, {}   # game id -> its last frame's signature; last woken signature; checks behind
+games_seeded = False
+skipped = []                 # ids of messages dropped from an oversized backlog, named in the next wake
 first_at = None
 stream_open, stream_opened, stream_resp = False, 0.0, None
 
@@ -68,30 +70,10 @@ def queue(kind, body, mid=None):
     first_at = first_at or time.monotonic()
 
 
-def item_game(item):
-    gid = item.get("id")
-    if isinstance(gid, int):
-        return gid
-    m = GAME_ID.search(str((item.get("call") or {}).get("path") or ""))
-    return int(m.group(1)) if m else None
-
-
-def note_awaiting(room_state, from_check=False):
-    """Under lock: queue each newly awaiting item, unless a recent game frame already covered it. From the REST check, a
-    game awaiting this member with no recent frame means the stream missed it: returns True (stuck)."""
-    sigs = {json.dumps(i, sort_keys=True): i for i in (room_state or {}).get("awaiting_you") or [] if isinstance(i, dict)}
-    old, stuck = set(state.get("awaiting") or []), False
-    for sig, item in sigs.items():
-        if sig in old:
-            continue
-        if item.get("type") == "game":
-            gid = item_game(item)
-            if gid is not None and time.monotonic() - last_frame.get(gid, -1e9) < FRAME_COVERS:
-                continue
-            stuck = stuck or from_check
-        queue("awaiting", item)
-    state["awaiting"] = list(sigs)
-    return stuck
+def gsig(g):
+    """What a game frame changes: who's to play, the phase, the result, and each seat's lobby and placement."""
+    return json.dumps([g.get(k) for k in ("status", "phase", "turn", "turn_of", "winner", "declined_by")]
+                      + [[p.get("accepted"), p.get("placed")] for p in g.get("players") or [] if isinstance(p, dict)])
 
 
 def on_message(d):
@@ -103,13 +85,11 @@ def on_message(d):
     if mid <= state["seen"]:
         return None
     state["seen"] = mid
-    rs = d.pop("room_state", None)
+    d.pop("room_state", None)
     if str(d.get("from") or "") != state.get("self"):
         queue("message", d, mid)
     elif not any(p["kind"] == "message" for p in pending):
         state["delivered"] = mid   # only this member's own messages since the last delivery
-    if isinstance(rs, dict):
-        note_awaiting(rs)
     return mid
 
 
@@ -120,18 +100,38 @@ def on_game(d):
     gid, me = g.get("id"), state.get("self")
     if gid is None:
         return
-    last_frame[gid] = time.monotonic()
+    sig = gsig(g)
+    frame_sig[gid] = sig
     if me not in [p.get("name") for p in g.get("players") or [] if isinstance(p, dict)]:
         return
     last = g.get("last_move") if isinstance(g.get("last_move"), dict) else {}
     if g.get("status") == "running" and last.get("by") == me and g.get("turn_of") not in (None, me):
         return
-    sig = json.dumps([g.get(k) for k in ("status", "phase", "turn", "turn_of", "winner", "declined_by")]
-                     + [[p.get("accepted"), p.get("placed")] for p in g.get("players") or [] if isinstance(p, dict)])
     if game_sig.get(gid) == sig:
         return
     game_sig[gid] = sig
     queue("game", d)
+
+
+def check_games(games):
+    """Under lock: compare the games list with the frames seen. The first read only records where each game stands.
+    A game whose summary differs from its last frame on two checks running was missed: its summary is woken in the
+    frame's place (on_game filters it as usual). Returns True if any was missed (the stream is stuck)."""
+    global games_seeded
+    stuck = False
+    for g in games:
+        if not isinstance(g, dict) or g.get("id") is None:
+            continue
+        gid, sig = g["id"], gsig(g)
+        if not games_seeded or frame_sig.get(gid) == sig:
+            frame_sig[gid], behind[gid] = sig, 0
+            continue
+        behind[gid] = behind.get(gid, 0) + 1
+        if behind[gid] >= 2:
+            stuck, behind[gid] = True, 0
+            on_game({"type": "game", "game": g})   # sets frame_sig
+    games_seeded = True
+    return stuck
 
 
 class Room:
@@ -159,9 +159,7 @@ def prime(room):
         return
     r = room.get("messages?limit=1")
     last = int(r.get("last_id") or 0)
-    aw = (r.get("room_state") or {}).get("awaiting_you") or []
-    state.update({"self": r.get("you") or "", "seen": last, "delivered": last,
-                  "awaiting": [json.dumps(i, sort_keys=True) for i in aw if isinstance(i, dict)]})
+    state.update({"self": r.get("you") or "", "seen": last, "delivered": last})
     save()
     log(event="primed", delivered=last, member=state["self"])
 
@@ -186,8 +184,21 @@ def fenced(body):
     return f"{fence}\n{text}\n{fence}"
 
 
-def wake_text(batch):
-    return "[Agent Chat]\n" + "\n".join(fenced(p["body"]) for p in batch)
+def take_batch():
+    """Under lock: the next wake's items, oldest first, at most PER_WAKE. A backlog over BACKLOG_MAX (after a long
+    outage) keeps only its newest items; the dropped messages are named by id in the next wake."""
+    if len(pending) > BACKLOG_MAX:
+        drop = pending[:-BACKLOG_MAX]
+        skipped.extend(p["id"] for p in drop if p["kind"] == "message")
+        del pending[:-BACKLOG_MAX]
+    return list(pending[:PER_WAKE])
+
+
+def wake_text(batch, skipped_ids=()):
+    head = "[Agent Chat]"
+    if skipped_ids:
+        head += f"\n({len(skipped_ids)} older messages not shown: ids {min(skipped_ids)}-{max(skipped_ids)})"
+    return head + "\n" + "\n".join(fenced(p["body"]) for p in batch)
 
 
 def send(cfg, text):
@@ -195,7 +206,8 @@ def send(cfg, text):
     the ids in the payload make a repeat recognisable."""
     try:
         target = ["--session-id", cfg["chat"]] if cfg.get("chat") else []   # no id: the main chat
-        p = subprocess.run(["musegadget", "send-user-msg", *target, text], stdin=subprocess.DEVNULL,
+        # The text goes on stdin ("-"): no argument-length limit, and room text never shows in the process list.
+        p = subprocess.run(["musegadget", "send-user-msg", *target, "-"], input=text,
                            capture_output=True, text=True, timeout=45, check=False)
     except (OSError, subprocess.TimeoutExpired) as e:
         return False, type(e).__name__
@@ -212,8 +224,9 @@ def sender(cfg):
         with lock:
             if not first_at or now < next_try or now - first_at < GRACE:
                 continue
-            batch = list(pending)
-            text = wake_text(batch)
+            batch = take_batch()
+            note = list(skipped)
+            text = wake_text(batch, note)
         t0 = time.time()
         ok, said = send(cfg, text)
         ack_ms = int((time.time() - t0) * 1000)
@@ -225,13 +238,13 @@ def sender(cfg):
             continue
         with lock:
             del pending[:len(batch)]
-            if mids:
-                state["delivered"] = max(state["delivered"], max(mids))
+            del skipped[:len(note)]
+            if mids or note:
+                state["delivered"] = max([state["delivered"], *mids, *note])
             save()
             first_at = time.monotonic() if pending else None
         next_try, backoff = 0.0, RETRY_FIRST
-        log(event="wake", ids=mids, games=games, awaiting=[p["body"].get("type") for p in batch if p["kind"] == "awaiting"],
-            server_ts=[p["body"].get("ts") for p in batch if p["kind"] == "message"], chars=len(text),
+        log(event="wake", ids=mids, games=games, skipped=len(note), server_ts=[p["body"].get("ts") for p in batch if p["kind"] == "message"], chars=len(text),
             t_send_ms=int(t0 * 1000), ack_ms=ack_ms)
 
 
@@ -246,12 +259,13 @@ def kick(reason):
 
 
 def checker(room):
-    """A cheap REST read: awaiting_you, plus any message the stream missed. With the stream down it is the fallback."""
+    """Cheap REST reads: messages the stream missed, and the games list. With the stream down it is the fallback."""
     while True:
         check_now.wait(CHECK_OPEN if stream_open else CHECK_DOWN)
         check_now.clear()
         try:
             r = room.get(f"messages?after={state['seen']}&wait=0")
+            games = room.get("games").get("games") or []
             now_ms = time.time() * 1000
             with lock:
                 missed = []
@@ -259,11 +273,11 @@ def checker(room):
                     mid = on_message(dict(d))
                     if mid and now_ms - float(d.get("ts") or now_ms) > LATE_MS:
                         missed.append(mid)
-                stuck = isinstance(r.get("room_state"), dict) and note_awaiting(r["room_state"], from_check=True)
+                stuck = check_games(games)
                 save()
                 live_long = stream_open and time.monotonic() - stream_opened > STALE_AFTER
             if live_long and (missed or stuck):
-                kick("missed messages %s" % missed if missed else "a game awaits with no frame")
+                kick("missed messages %s" % missed if missed else "a game moved with no frame")
         except (OSError, ValueError) as e:
             log(event="check-failed", error=type(e).__name__)
 

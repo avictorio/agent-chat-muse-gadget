@@ -4,7 +4,7 @@
 # agent's hook holds. `start`/`stop` last until the next boot. `kill` is step C4: SIGKILL, and systemd restarts it.
 # Output is the service state, the cursors and recent log lines (ids, names and times only).
 main() {
-  case ${1:?on, off, start, stop, kill or status} in
+  case ${1:?on, off, start, stop, kill, reset, cursor ID or status} in
     on) systemctl enable --now ada-watch ;;
     off) systemctl disable --now ada-watch ;;
     start) systemctl start ada-watch ;;
@@ -13,13 +13,18 @@ main() {
     reset)   # before a room change: the cursors belong to one room, and the next install primes new ones
       if systemctl is-active --quiet ada-watch; then echo "REFUSED: turn the watcher off first"; return 3; fi
       rm -f /home/ada-watch/.agent-chat/state.json; echo "cursors cleared"; return 0 ;;
+    cursor)   # set both cursors to a message id, with the watcher off: the next start replays from there
+      if systemctl is-active --quiet ada-watch; then echo "REFUSED: turn the watcher off first"; return 3; fi
+      [[ ${2:-} =~ ^[0-9]+$ ]] || { echo "cursor needs a message id"; return 2; }
+      python3 -c 'import json, sys; p = "/home/ada-watch/.agent-chat/state.json"; d = json.load(open(p)); d["seen"] = d["delivered"] = int(sys.argv[1]); json.dump(d, open(p, "w"))' "$2"
+      set -- status 3 ;;
     status) ;;
     *) echo "unknown action"; return 2 ;;
   esac
   sleep 3
   echo "active: $(systemctl is-active ada-watch) at-boot: $(systemctl is-enabled ada-watch)"
   python3 -c 'import json; d = json.load(open("/home/ada-watch/.agent-chat/state.json")); print("seen:", d["seen"], "delivered:", d["delivered"], "member:", d.get("self"))'
-  journalctl -u ada-watch -n "${2:-15}" --no-pager -o cat
+  journalctl -u ada-watch -n "${2:-15}" --no-pager -o cat | cut -c1-400
   return 0
 }
 main "$@" </dev/null; exit $?
