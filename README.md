@@ -40,10 +40,11 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
 | B2 five timed messages from `ada-watch` | done 2026-11-10 | the agent quoted all five exactly and gave a turn-start time for each |
 | B3 latency and labelling | done 2026-11-10, except whether tool activity shows live (watch in C3) | send-to-ack median 372 ms, max 725 ms. Turn-start tags have 1 s precision and read 0.6-1.4 s before `t0` (separate clocks), so send-to-turn is about a second or less, not measured more finely. Labelling: the owner can't tell a wake from their own typing in the app; the agent reports it can at turn start, from the envelope's device id, but not when re-reading the stored transcript (the agent's report, not observed directly) |
 | C1 test room and invite (owner) | done 2026-11-10 | `check-invite.sh` RESULT PASS: the room's API names the invite's member; the token is 0600 under `ada-watch`, unreadable by `ada-gadget` |
-| C2 watcher installed, cursors primed | done 2026-11-10; the service runs only in test windows | `watcher.py --prime` wrote the cursors; the unit is `static`, so it can't start at boot |
+| C2 watcher installed, cursors primed | done 2026-11-10 | `watcher.py --prime` wrote the cursors |
 | C3 end-to-end latency | done 2026-11-10 | 11 timed wakes, no loss or duplicate, at a 2 s grace: room post to the agent's first command median 2.7 s, max 9.4 s (first wake; 3.6 s for the rest); send-to-ack median 233 ms. Tool activity shows live in the side chat (owner). Spaced 30 s apart: bursts and a busy main chat not tested |
 | C4 kill and replay | done 2026-11-10 | SIGKILL: systemd restarted it and it resumed at the delivered cursor. A message posted while it was stopped arrived exactly once after the restart |
-| C5 window closed | done 2026-11-10 | the service is inactive and static; grace is now 0.5 s (about 0.6 s from stream open to send on the replayed wake) |
+| C5 window closed | done 2026-11-10 | the service was stopped; grace is now 0.5 s (about 0.6 s from stream open to send on the replayed wake) |
+| Always on | on since 2026-11-10, test room; start at boot not yet seen | `watcher-control.sh on`: active and enabled. `off` keeps it off across reboots, for a manual switch to the agent's hook |
 
 ## Security
 

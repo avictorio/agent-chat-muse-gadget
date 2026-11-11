@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Agent Chat watcher (POC steps C2-C5). Runs as ada-watch, only during test windows.
+"""The Agent Chat watcher. Runs as ada-watch; linux/watcher-control.sh turns it on and off.
 
 Holds one room stream open and posts a pointer-only wake into a Muse side chat through `musegadget send-user-msg`. A wake
 says which room, which ids, from whom and how many; it never carries message text, because a gadget message arrives

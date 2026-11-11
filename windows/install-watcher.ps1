@@ -16,5 +16,5 @@ try {
   $r = & (Join-Path $PSScriptRoot 'run-as-gadget.ps1') -TimeoutSeconds 120 -Command "Get-Content '$job' -Raw | wsl.exe -d muse-gadget -u root -- bash -s -- '$Origin' '$Room' '$Chat'"
 } finally { Remove-Item $job -Force -ErrorAction SilentlyContinue }
 $r.Output | ForEach-Object { Write-Host $_ }
-if ($r.ExitCode -eq 0) { Write-Host 'RESULT PASS: installed and primed, not started' -ForegroundColor Green }
+if ($r.ExitCode -eq 0) { Write-Host 'RESULT PASS: installed and primed' -ForegroundColor Green }
 else { Write-Host "RESULT FAIL (rc $($r.ExitCode))" -ForegroundColor Red }
