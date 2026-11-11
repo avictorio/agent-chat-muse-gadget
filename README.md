@@ -29,7 +29,7 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
 | A2 hardening | done 2026-11-10 | `check-hardening.sh` RESULT PASS 10/10 after `wsl --terminate` |
 | A3 SDK at `55cbf48`, no pairing | done 2026-11-10 | `musegadget info`: node id, `paired: no`; service active |
 | A4 SDK token (owner) | done 2026-11-10 | `set-token.ps1` RESULT PASS |
-| A5-A7 pair from a live USB, copy state back (owner; docs/pairing-runbook.md) | done 2026-11-11 | `check-registered.sh` RESULT PASS 4/4 |
+| A5-A7 pair from a live USB, copy state back (owner; docs/pairing-runbook.md) | done 2026-11-10 | `check-registered.sh` RESULT PASS 4/4 |
 | A8 keep-alive | done 2026-11-10 (came up by itself after a reboot) | after 5 min with nothing else attached: distro up since the task started, `sleep infinity` as ada-watch, service active |
 
 ## Security

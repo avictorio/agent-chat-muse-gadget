@@ -89,6 +89,9 @@ The end-to-end check (SDK): ask your Muse to run `hostname` on the gadget. It mu
 
 - **BitLocker recovery screen** when Windows starts: type the recovery key. Nothing is lost; it happens when the
   firmware thinks the boot path changed.
+- **Windows' clock is 8 hours fast** after the live session (seen twice): Ubuntu stores the hardware clock in UTC and
+  Windows reads it as local time. Settings > Time & language > Date & time > **Sync now** fixes it; do this first thing,
+  since a wrong clock can break sign-ins and run scheduled jobs early.
 - **No `Roles: peripheral`** in the live session: the adapter can't advertise there. Stop and tell Claude; the fallback
   is a USB Bluetooth dongle (memo section 1).
 - **`echo` prints nothing** in step 3: the stick isn't at `/cdrom` (it was written in DD mode). Run
