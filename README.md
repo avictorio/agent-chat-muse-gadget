@@ -14,10 +14,15 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
   - `in-distro.ps1`: pipe one of `linux/*.sh` into the distro as a chosen Linux user.
   - `set-token.ps1`: the owner types the SDK token (hidden input).
   - `export-seed.ps1`, `import-state.ps1`: the owner moves the state over a USB stick for pairing (A5, A7).
+  - `set-invite.ps1`: the owner types the test room's invite (hidden input; C1).
+  - `install-watcher.ps1`: installs the watcher and primes its cursors, without starting it (C2).
 - `linux/`: run inside the distro through `windows/in-distro.ps1`.
   - `harden.sh`, `check-hardening.sh`: `wsl.conf`, the accounts, and the check.
   - `fetch-sdk.sh`, `install-sdk.sh`: the SDK at a pinned commit, installed with `--run-as ada-gadget --no-pair`.
   - `import-state.sh`, `check-registered.sh`: A7's inside half and its check.
+  - `side-chat-send.sh`: B2's timed test messages, as `ada-watch`.
+  - `set-invite.sh`, `check-invite.sh`: C1's inside half and its check.
+  - `watcher.py`, `install-watcher.sh`, `watcher-control.sh`: the watcher, its install, and start/stop for a test window.
 - `docs/pairing-runbook.md`: A5-A7, step by step, for the owner.
 
 ## Steps
@@ -34,6 +39,8 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
 | B1 side chat agreed (owner) | done 2026-11-10 | an id is agreed, kept out of this repo; the main chat is never used for tests |
 | B2 five timed messages from `ada-watch` | done 2026-11-10 | the agent quoted all five exactly and gave a turn-start time for each |
 | B3 latency and labelling | done 2026-11-10, except whether tool activity shows live (watch in C3) | send-to-ack median 372 ms, max 725 ms. Turn-start tags have 1 s precision and read 0.6-1.4 s before `t0` (separate clocks), so send-to-turn is about a second or less, not measured more finely. Labelling: the owner can't tell a wake from their own typing in the app; the agent reports it can at turn start, from the envelope's device id, but not when re-reading the stored transcript (the agent's report, not observed directly) |
+| C1 test room and invite (owner) | done 2026-11-10 | `check-invite.sh` RESULT PASS: the room's API names the invite's member; the token is 0600 under `ada-watch`, unreadable by `ada-gadget` |
+| C2 watcher installed, cursors primed | done 2026-11-10; the service runs only in test windows | `watcher.py --prime` wrote the cursors; the unit is `static`, so it can't start at boot |
 
 ## Security
 
