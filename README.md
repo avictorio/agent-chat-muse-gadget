@@ -22,7 +22,9 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
   - `import-state.sh`, `check-registered.sh`: A7's inside half and its check.
   - `side-chat-send.sh`: B2's timed test messages, as `ada-watch`.
   - `set-invite.sh`, `check-invite.sh`: C1's inside half and its check.
-  - `watcher.py`, `install-watcher.sh`, `watcher-control.sh`: the watcher, its install, and start/stop for a test window.
+  - `watcher.py`, `install-watcher.sh`, `watcher-control.sh`: the watcher, its install, and on/off.
+  - `watcher-selftest.sh`, `watch-diag.sh`, `room-shape.sh`: the watcher's self-test, a journal summary, and the room
+    API's payload shapes.
 - `docs/pairing-runbook.md`: A5-A7, step by step, for the owner.
 
 ## Steps
@@ -44,7 +46,7 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
 | C3 end-to-end latency | done 2026-11-10 | 11 timed wakes, no loss or duplicate, at a 2 s grace: room post to the agent's first command median 2.7 s, max 9.4 s (first wake; 3.6 s for the rest); send-to-ack median 233 ms. Tool activity shows live in the side chat (owner). Spaced 30 s apart: bursts and a busy main chat not tested |
 | C4 kill and replay | done 2026-11-10 | SIGKILL: systemd restarted it and it resumed at the delivered cursor. A message posted while it was stopped arrived exactly once after the restart |
 | C5 window closed | done 2026-11-10 | the service was stopped; grace is now 0.5 s (about 0.6 s from stream open to send on the replayed wake) |
-| Always on | on since 2026-11-10, one room, wakes to the main chat (owner); start at boot not yet seen | `watcher-control.sh on`: active and enabled. `off` keeps it off across reboots, for a manual switch to the agent's hook |
+| Always on | on since 2026-11-10, one room, wakes to the main chat (owner); start at boot not yet seen. Since 2026-11-11 a wake carries the full items, fenced, without room_state (owner) | `watcher-control.sh on`: active and enabled. `off` keeps it off across reboots, for a manual switch to the agent's hook |
 
 ## Security
 
