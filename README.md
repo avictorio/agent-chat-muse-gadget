@@ -33,7 +33,7 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
 | A8 keep-alive | done 2026-11-10 (came up by itself after a reboot) | after 5 min with nothing else attached: distro up since the task started, `sleep infinity` as ada-watch, service active |
 | B1 side chat agreed (owner) | done 2026-11-10 | an id is agreed, kept out of this repo; the main chat is never used for tests |
 | B2 five timed messages from `ada-watch` | done 2026-11-10 | the agent quoted all five exactly and gave a turn-start time for each |
-| B3 latency | numbers in; labelling not yet recorded | send-to-ack median 372 ms, max 725 ms. Turn-start tags have 1 s precision and read 0.6-1.4 s before `t0` (separate clocks), so send-to-turn is about a second or less, not measured more finely |
+| B3 latency and labelling | done 2026-11-10, except whether tool activity shows live (watch in C3) | send-to-ack median 372 ms, max 725 ms. Turn-start tags have 1 s precision and read 0.6-1.4 s before `t0` (separate clocks), so send-to-turn is about a second or less, not measured more finely. Labelling: the owner can't tell a wake from their own typing in the app; the agent reports it can at turn start, from the envelope's device id, but not when re-reading the stored transcript (the agent's report, not observed directly) |
 
 ## Security
 
