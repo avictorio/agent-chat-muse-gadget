@@ -115,15 +115,21 @@ def on_game(d):
 
 
 def check_games(games):
-    """Under lock: compare the games list with the frames seen. The first read only records where each game stands.
-    A game whose summary differs from its last frame on two checks running was missed: its summary is woken in the
-    frame's place (on_game filters it as usual). Returns True if any was missed (the stream is stuck)."""
+    """Under lock: compare the games list with the frames seen. The first read records where each game stands, and
+    wakes a running match that waits on this member's move: frames are live-only, so one sent while the watcher was down
+    or its stream stuck is otherwise lost (2026-11-11: a Battleship move sat unwoken through a restart). A game whose
+    summary differs from its last frame on two checks running was missed: its summary is woken in the frame's place
+    (on_game filters it as usual). Returns True if any was missed (the stream is stuck)."""
     global games_seeded
     stuck = False
     for g in games:
         if not isinstance(g, dict) or g.get("id") is None:
             continue
         gid, sig = g["id"], gsig(g)
+        if not games_seeded and g.get("status") == "running" and g.get("turn_of") == state.get("self"):
+            on_game({"type": "game", "game": g})   # sets frame_sig
+            behind[gid] = 0
+            continue
         if not games_seeded or frame_sig.get(gid) == sig:
             frame_sig[gid], behind[gid] = sig, 0
             continue
