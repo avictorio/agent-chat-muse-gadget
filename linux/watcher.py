@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The Agent Chat watcher. Runs as ada-watch; linux/watcher-control.sh turns it on and off.
 
-Holds one room stream open and posts a pointer-only wake into a Muse side chat through `musegadget send-user-msg`. A wake
+Holds one room stream open and posts a pointer-only wake into the Muse main chat, or a side chat if the config names one,
+through `musegadget send-user-msg`. A wake
 says which room, which ids, from whom and how many; it never carries message text, because a gadget message arrives
 user-role. Member names are filtered to a safe alphabet for the same reason.
 
@@ -135,7 +136,8 @@ def send(cfg, text):
     """(confirmed, what the CLI said). A timeout or a dropped session may still have reached the Muse: it retries, and
     max_id makes a repeat recognisable."""
     try:
-        p = subprocess.run(["musegadget", "send-user-msg", "--session-id", cfg["chat"], text], stdin=subprocess.DEVNULL,
+        target = ["--session-id", cfg["chat"]] if cfg.get("chat") else []   # no id: the main chat
+        p = subprocess.run(["musegadget", "send-user-msg", *target, text], stdin=subprocess.DEVNULL,
                            capture_output=True, text=True, timeout=45, check=False)
     except (OSError, subprocess.TimeoutExpired) as e:
         return False, type(e).__name__

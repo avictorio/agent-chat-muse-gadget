@@ -1,10 +1,10 @@
 # windows/install-watcher.ps1 -- step C2: installs linux/watcher.py in the distro and primes its cursors. Doesn't start it.
-#   & windows\install-watcher.ps1 -Origin https://<site> -Room <room> -Chat <side-chat-id>
+#   & windows\install-watcher.ps1 -Origin https://<site> -Room <room> [-Chat <side-chat-id>]
 # Run from `operator`, unelevated. The origin, room and chat id are parameters so they stay out of the repo.
 param(
   [Parameter(Mandatory)][ValidatePattern('^https://[A-Za-z0-9.-]+$')][string]$Origin,
   [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9_.-]{1,100}$')][string]$Room,
-  [Parameter(Mandatory)][ValidatePattern('^[A-Za-z0-9-]{1,64}$')][string]$Chat
+  [ValidatePattern('^[A-Za-z0-9-]{1,64}$')][string]$Chat = ''   # none: wakes go to the main chat
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
