@@ -25,6 +25,7 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
   - `watcher.py`, `install-watcher.sh`, `watcher-control.sh`: the watcher, its install, and on/off.
   - `watcher-selftest.sh`, `watch-diag.sh`, `room-shape.sh`: the watcher's self-test, a journal summary, and the room
     API's payload shapes. `games-probe.sh`: the games list, one line per game, with the fields the wake signature reads.
+    `cycles-probe.sh`: a Light Cycles match's timing fields. `docs-lines.sh`: a line range of the room API's docs.
 - `docs/pairing-runbook.md`: A5-A7, step by step, for the owner.
 
 ## Steps

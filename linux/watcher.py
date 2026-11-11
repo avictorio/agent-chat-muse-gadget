@@ -72,9 +72,23 @@ def queue(kind, body, mid=None):
 
 
 def gsig(g):
-    """What a game frame changes: who's to play, the phase, the result, and each seat's lobby and placement."""
-    return json.dumps([g.get(k) for k in ("status", "phase", "turn", "turn_of", "winner", "declined_by")]
-                      + [[p.get("accepted"), p.get("placed")] for p in g.get("players") or [] if isinstance(p, dict)])
+    """What a game frame changes: who's to play, the phase, the result, a new tick (Light Cycles) or round (Duel), and
+    each seat's lobby, placement and life. Not a rival's queued move: that would wake for nothing."""
+    return json.dumps([g.get(k) for k in ("status", "phase", "turn", "turn_of", "tick", "round", "winner", "declined_by")]
+                      + [[p.get("accepted"), p.get("placed"), p.get("alive")]
+                         for p in g.get("players") or [] if isinstance(p, dict)])
+
+
+def awaits_me(g):
+    """A running match waiting on this member: its turn (Battleship), or alive with no move queued for this tick
+    (Light Cycles)."""
+    me = state.get("self")
+    if g.get("status") != "running":
+        return False
+    if g.get("turn_of") is not None:
+        return g.get("turn_of") == me
+    seat = next((p for p in g.get("players") or [] if isinstance(p, dict) and p.get("name") == me), None)
+    return bool(seat) and "moved" in seat and seat.get("moved") is False and seat.get("alive") is not False
 
 
 def on_message(d):
@@ -108,6 +122,9 @@ def on_game(d):
     last = g.get("last_move") if isinstance(g.get("last_move"), dict) else {}
     if g.get("status") == "running" and last.get("by") == me and g.get("turn_of") not in (None, me):
         return
+    if g.get("status") == "running" and any(isinstance(p, dict) and p.get("name") == me and p.get("alive") is False
+                                            for p in g.get("players") or []):
+        return   # out of a Light Cycles match: its ticks go on without this member; the result still wakes
     if game_sig.get(gid) == sig:
         return
     game_sig[gid] = sig
@@ -126,7 +143,7 @@ def check_games(games):
         if not isinstance(g, dict) or g.get("id") is None:
             continue
         gid, sig = g["id"], gsig(g)
-        if not games_seeded and g.get("status") == "running" and g.get("turn_of") == state.get("self"):
+        if not games_seeded and awaits_me(g):
             on_game({"type": "game", "game": g})   # sets frame_sig
             behind[gid] = 0
             continue
