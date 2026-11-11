@@ -25,7 +25,7 @@ import urllib.request
 
 DIR = "/home/ada-watch/.agent-chat"
 CONFIG, HEADER, STATE = f"{DIR}/watcher.json", f"{DIR}/invite.header", f"{DIR}/state.json"
-GRACE = 2.0          # after the first new message, so a burst becomes one wake
+GRACE = 0.5          # after the first new message, so a burst becomes one wake
 READ_TIMEOUT = 45    # the server pings every 15 s, so this means a dead stream
 CHECK_OPEN, CHECK_DOWN = 30, 5   # REST check interval with the stream up, and the fallback with it down
 RETRY_FIRST, RETRY_MAX = 5, 60
