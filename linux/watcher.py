@@ -20,6 +20,7 @@ The log holds ids, names and times, never text.
   watcher.py --prime  write the cursors at the room's current position, if there are none, and exit
 """
 import copy
+import http.client
 import json
 import os
 import re
@@ -278,8 +279,16 @@ def checker(room):
                 live_long = stream_open and time.monotonic() - stream_opened > STALE_AFTER
             if live_long and (missed or stuck):
                 kick("missed messages %s" % missed if missed else "a game moved with no frame")
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, http.client.HTTPException) as e:   # e.g. IncompleteRead: a reply cut short
             log(event="check-failed", error=type(e).__name__)
+
+
+def thread_died(args):
+    """A worker thread that dies leaves the process up but deaf (2026-11-11: the checker died on an IncompleteRead and
+    stuck streams went unnoticed for hours). Exit instead: systemd restarts the watcher, which resumes at `delivered`."""
+    log(event="thread-died", thread=getattr(args.thread, "name", "?"), error=args.exc_type.__name__)
+    sys.stderr.flush()
+    os._exit(1)
 
 
 def stream(room):
@@ -324,6 +333,7 @@ def main():
     prime(room)
     if "--prime" in sys.argv:
         return
+    threading.excepthook = thread_died
     threading.Thread(target=sender, args=(cfg,), daemon=True).start()
     threading.Thread(target=checker, args=(room,), daemon=True).start()
     check_now.set()
@@ -332,7 +342,7 @@ def main():
         opened = time.monotonic()
         try:
             stream(room)
-        except (OSError, urllib.error.URLError, socket.timeout, ValueError) as e:
+        except (OSError, urllib.error.URLError, socket.timeout, ValueError, http.client.HTTPException) as e:
             log(event="stream-error", error=type(e).__name__)
         stream_open = False
         check_now.set()
