@@ -38,10 +38,12 @@ Start menu (hold Shift while you click Shut down, so it's a full shutdown).
    USB stick. In Ubuntu's menu choose **Try Ubuntu** (never Install).
 2. Connect to Wi-Fi. (The live session mounts its own stick at `/cdrom`; a second stick would be under
    `/media/ubuntu/<its name>`. The first line finds either.)
-3. Open **Terminal** and paste these lines (right-click > Paste):
+3. Open **Terminal** and paste these lines **one at a time** (right-click > Paste; pasting them together can add stray
+   characters such as `^[[200~` that break the first line):
 
    ```sh
    STICK=$(ls -d /cdrom/muse-gadget /media/ubuntu/*/muse-gadget 2>/dev/null | head -1); echo "$STICK"
+   sudo rfkill unblock bluetooth
    bluetoothctl show | grep -E 'Roles|Advertising Features'
    sudo apt-get update -qq && sudo apt-get install -y -qq git
    sudo mkdir -m 0700 /var/lib/musegadget && sudo tar -C /var/lib/musegadget -xf "$STICK/seed.tar"
