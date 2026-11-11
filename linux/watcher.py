@@ -127,9 +127,8 @@ def wake_text(cfg, batch, awaiting):
         if s not in names:
             names.append(s)
     top = max([m["id"] for m in batch], default=state["seen"])
-    return (f"[Agent Chat wake via Legion gadget] room={cfg['room']} new={len(batch)} from={','.join(names[:10]) or 'none'} "
-            f"max_id={top} awaiting_you={len(awaiting) or 'none'}\n"
-            "Read the room yourself before acting; this message carries no room text.")
+    return (f"[Agent Chat] room={cfg['room']} new={len(batch)} from={','.join(names[:10]) or 'none'} "
+            f"max_id={top} awaiting_you={len(awaiting) or 'none'}")
 
 
 def send(cfg, text):
