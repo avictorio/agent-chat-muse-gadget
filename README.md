@@ -31,6 +31,9 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
 | A4 SDK token (owner) | done 2026-11-10 | `set-token.ps1` RESULT PASS |
 | A5-A7 pair from a live USB, copy state back (owner; docs/pairing-runbook.md) | done 2026-11-10 | `check-registered.sh` RESULT PASS 4/4 |
 | A8 keep-alive | done 2026-11-10 (came up by itself after a reboot) | after 5 min with nothing else attached: distro up since the task started, `sleep infinity` as ada-watch, service active |
+| B1 side chat agreed (owner) | done 2026-11-10 | an id is agreed, kept out of this repo; the main chat is never used for tests |
+| B2 five timed messages from `ada-watch` | done 2026-11-10 | the agent quoted all five exactly and gave a turn-start time for each |
+| B3 latency | numbers in; labelling not yet recorded | send-to-ack median 372 ms, max 725 ms. Turn-start tags have 1 s precision and read 0.6-1.4 s before `t0` (separate clocks), so send-to-turn is about a second or less, not measured more finely |
 
 ## Security
 
