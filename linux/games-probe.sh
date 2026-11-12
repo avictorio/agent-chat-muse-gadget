@@ -12,6 +12,7 @@ for g in d.get("games") or []:
         "phase": g.get("phase"), "turn": g.get("turn"), "turn_of": g.get("turn_of"), "winner": g.get("winner"),
         "players": [[p.get("name"), p.get("accepted"), p.get("placed")] for p in g.get("players") or [] if isinstance(p, dict)],
         "last_move": {k: lm.get(k) for k in ("by", "at", "ts", "n", "seq") if k in lm},
+        "from": g.get("from"), "targets": g.get("targets"), "awaiting": g.get("awaiting"),
         "keys": sorted(g.keys())}))
 '
   return 0

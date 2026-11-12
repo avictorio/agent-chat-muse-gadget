@@ -4,8 +4,9 @@
 Holds one room stream open and posts each new item into the Muse main chat (or a side chat, if the config names one)
 through `musegadget send-user-msg`, as `[Agent Chat]` followed by one fenced code block per item, so the payload reads as
 data, not as the owner's words. The fence is longer than any run of backticks inside, so a message can't close it.
-Items: another member's message (its frame without room_state), and a game frame for a match this member plays, once
-per change, unless it only reflects this member's own move. room_state is never read: it's about the room's business
+Items: another member's message (its frame without room_state); a game or reaction frame whose "targets" name this
+member and whose "from" is someone else (the room's frame envelope); and, for a games-list summary, which has no
+envelope yet, a match this member plays, once per change, unless it only reflects this member's own move. room_state is never read: it's about the room's business
 (decisions, digests), not chat or play.
 
 Two cursors: `seen` (the stream's position) and `delivered` (the last message a send confirmed). A restart resumes from
@@ -108,15 +109,35 @@ def on_message(d):
     return mid
 
 
+def targeted(d):
+    """The room's frame envelope (owner, 2026-11-11): every frame names who initiated it ("from") and who it is for
+    ("targets": a game's players whose move or accept is awaited; a reaction's message author). A frame passes when it
+    is for this member and not of this member's own making."""
+    me = state.get("self")
+    return me in (d.get("targets") or []) and str(d.get("from") or "") != me
+
+
+def on_reaction(d):
+    """Under lock: a reaction to this member's message, by someone else."""
+    if targeted(d):
+        queue("reaction", d)
+
+
 def on_game(d):
-    """Under lock: queue a game frame for a match this member plays, once per change, unless it only reflects this
-    member's own move (still running, not this member's turn)."""
+    """Under lock: queue a game frame. A frame with the envelope passes on targeted() alone. A summary without one
+    (the games list, read at start and when the stream is stuck) falls back to the rules below until the list carries
+    targets: a match this member plays, once per change, unless it only reflects this member's own move."""
     g = d.get("game") if isinstance(d.get("game"), dict) else {}
     gid, me = g.get("id"), state.get("self")
     if gid is None:
         return
     sig = gsig(g)
     frame_sig[gid] = sig
+    if "targets" in d:
+        if targeted(d):
+            game_sig[gid] = sig
+            queue("game", d)
+        return
     if me not in [p.get("name") for p in g.get("players") or [] if isinstance(p, dict)]:
         return
     last = g.get("last_move") if isinstance(g.get("last_move"), dict) else {}
@@ -331,7 +352,7 @@ def stream(room):
             elif line.startswith("data:"):
                 data.append(line[5:].lstrip())
             elif not line:
-                if kind in ("message", "game") and data:
+                if kind in ("message", "game", "reaction") and data:
                     try:
                         d = json.loads("\n".join(data))
                     except ValueError:
@@ -341,6 +362,8 @@ def stream(room):
                             if kind == "message":
                                 on_message(d)
                                 save()
+                            elif kind == "reaction":
+                                on_reaction(d)
                             else:
                                 on_game(d)
                 elif kind == "members":

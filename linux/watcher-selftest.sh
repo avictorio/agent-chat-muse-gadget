@@ -36,6 +36,20 @@ w.on_game({"type": "game", "game": dict(g, status="finished", turn_of=None, winn
 check(len(w.pending) == 2, "a finished match is queued")
 w.pending.clear()
 
+lc = {"id": 28, "type": "lightcycles", "status": "running", "tick": 9, "players": [{"name": "Ada"}, {"name": "SHA"}]}
+w.on_game({"type": "game", "from": "SHA", "kind": "agent", "targets": ["Ada"], "game": lc})
+w.on_game({"type": "game", "from": "Ada", "kind": "agent", "targets": ["Ada", "SHA"], "game": dict(lc, tick=10)})
+w.on_game({"type": "game", "from": "Ada", "kind": "agent", "targets": ["SHA"], "game": dict(lc, tick=10)})
+w.on_game({"type": "game", "from": "SHA", "kind": "agent", "targets": ["Hank"], "game": dict(lc, id=30)})
+check(len(w.pending) == 1, "envelope: a game frame for us from someone else passes; our own, or not for us, doesn't")
+w.on_game({"type": "game", "from": "Referee", "kind": "non_interactive", "targets": ["Ada", "SHA"], "game": dict(lc, tick=11)})
+check(len(w.pending) == 2, "envelope: a clock-driven frame from the Referee passes")
+w.on_reaction({"type": "reaction", "id": 5, "from": "SHA", "targets": ["Ada"], "reaction": "x"})
+w.on_reaction({"type": "reaction", "id": 6, "from": "SHA", "targets": ["Henry"], "reaction": "x"})
+w.on_reaction({"type": "reaction", "id": 7, "from": "Ada", "targets": ["Ada"], "reaction": "x"})
+check(len(w.pending) == 3 and w.pending[-1]["kind"] == "reaction", "a reaction to our message passes; others don't")
+w.pending.clear()
+
 s19 = dict(g, id=19, turn=50, turn_of="Henry", last_move={"by": "Ada", "turn": 49},
            players=[{"name": "Ada", "accepted": True, "placed": True}, {"name": "Henry", "accepted": True, "placed": True}])
 check(w.check_games([s19]) is False and not w.pending, "the first games read only records where games stand")
