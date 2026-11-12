@@ -26,7 +26,7 @@ agent's own hook stays the guarantee; this path is best-effort (dark while the l
   - `watcher-selftest.sh`, `watch-diag.sh`, `room-shape.sh`: the watcher's self-test, a journal summary, and the room
     API's payload shapes. `games-probe.sh`: the games list, one line per game, with the fields the wake signature reads.
     `cycles-probe.sh`: a Light Cycles match's timing fields. `stale-probe.sh`: game frames against the games list, with
-    each disagreement the stuck check would count. `docs-lines.sh`, `docs-grep.sh`: a line range, or the lines holding a word, of the room API's docs.
+    each disagreement the stuck check would count. `auth-probe.sh`: why a room read is refused (status and error text). `docs-lines.sh`, `docs-grep.sh`: a line range, or the lines holding a word, of the room API's docs.
 - `docs/pairing-runbook.md`: A5-A7, step by step, for the owner.
 
 ## Steps

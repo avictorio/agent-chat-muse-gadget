@@ -133,9 +133,9 @@ def check_games(games):
     wakes a match that targets this member: frames are live-only, so one sent while the watcher was down or its stream
     stuck is otherwise lost (2026-11-11: a Battleship move sat unwoken through a restart). A game whose summary differs
     from its last frame on two checks running was missed: its summary is woken in the frame's place (on_game filters it
-    as usual). Returns True if any was missed (the stream is stuck)."""
+    as usual). Returns the ids of the games missed (any means the stream is stuck)."""
     global games_seeded
-    stuck = False
+    stuck = []
     for g in games:
         if not isinstance(g, dict) or g.get("id") is None:
             continue
@@ -149,7 +149,8 @@ def check_games(games):
             continue
         behind[gid] = behind.get(gid, 0) + 1
         if behind[gid] >= 2:
-            stuck, behind[gid] = True, 0
+            stuck.append(gid)
+            behind[gid] = 0
             on_game({"type": "game", "game": g})   # sets frame_sig
     games_seeded = True
     return stuck
@@ -298,7 +299,7 @@ def checker(room):
                 save()
                 live_long = stream_open and time.monotonic() - stream_opened > STALE_AFTER
             if live_long and (missed or stuck):
-                kick("missed messages %s" % missed if missed else "a game moved with no frame")
+                kick("missed messages %s" % missed if missed else "a game moved with no frame: %s" % stuck)
         except (OSError, ValueError, http.client.HTTPException) as e:   # e.g. IncompleteRead: a reply cut short
             log(event="check-failed", error=type(e).__name__)
 

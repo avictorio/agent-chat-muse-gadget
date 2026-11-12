@@ -38,16 +38,16 @@ w.pending.clear()
 
 s19 = {"id": 19, "type": "battleship", "status": "running", "turn": 50, "targets": ["Henry"]}
 s20 = {"id": 20, "type": "newgame", "status": "running", "targets": ["Ada", "Jen"]}
-check(w.check_games([s19, s20]) is False and [p["body"]["game"]["id"] for p in w.pending] == [20],
+check(w.check_games([s19, s20]) == [] and [p["body"]["game"]["id"] for p in w.pending] == [20],
       "the first games read records where games stand, and wakes any game (of any type) that targets us")
 w.pending.clear()
 w.on_game({"type": "game", "from": "Henry", "targets": ["Ada"], "game": dict(s19, turn=51)})
 w.pending.clear()
-check(w.check_games([dict(s19, turn=51, targets=["Ada"]), s20]) is False, "a summary that matches its last frame is fine")
+check(w.check_games([dict(s19, turn=51, targets=["Ada"]), s20]) == [], "a summary that matches its last frame is fine")
 moved = dict(s19, turn=53, targets=["Ada", "Henry"])
-check(w.check_games([moved]) is False and not w.pending, "one check behind isn't called stuck yet")
-check(w.check_games([moved]) is True and len(w.pending) == 1, "two checks behind: stuck, and the summary is woken")
-check(w.check_games([moved]) is False and len(w.pending) == 1, "the missed game isn't woken twice")
+check(w.check_games([moved]) == [] and not w.pending, "one check behind isn't called stuck yet")
+check(w.check_games([moved]) == [19] and len(w.pending) == 1, "two checks behind: stuck (named by id), and the summary is woken")
+check(w.check_games([moved]) == [] and len(w.pending) == 1, "the missed game isn't woken twice")
 w.pending.clear()
 for i in range(200, 250):
     w.queue("message", {"id": i, "from": "Henry"}, i)
