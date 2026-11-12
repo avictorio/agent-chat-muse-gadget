@@ -22,20 +22,6 @@ t = w.wake_text(w.pending)
 check(t.startswith("[Agent Chat]\n````\n") and t.endswith("\n````"), "the fence outgrows the backticks inside")
 w.pending.clear()
 
-g = {"id": 21, "status": "running", "phase": "play", "turn": 40, "turn_of": "Ada",
-     "players": [{"name": "Ada", "accepted": True, "placed": True}, {"name": "Matheo", "accepted": True, "placed": True}],
-     "last_move": {"by": "Matheo", "cell": "E3", "result": "miss", "turn": 39}}
-w.on_game({"type": "game", "game": g})
-w.on_game({"type": "game", "game": dict(g)})
-check(len(w.pending) == 1, "a game frame for our turn is queued once")
-w.on_game({"type": "game", "game": dict(g, turn=41, turn_of="Matheo", last_move={"by": "Ada", "turn": 40})})
-check(len(w.pending) == 1, "a frame for our own move is skipped")
-w.on_game({"type": "game", "game": dict(g, id=22, players=[{"name": "Henry"}, {"name": "Hank"}])})
-check(len(w.pending) == 1, "a match we don't play is skipped")
-w.on_game({"type": "game", "game": dict(g, status="finished", turn_of=None, winner="Matheo")})
-check(len(w.pending) == 2, "a finished match is queued")
-w.pending.clear()
-
 lc = {"id": 28, "type": "lightcycles", "status": "running", "tick": 9, "players": [{"name": "Ada"}, {"name": "SHA"}]}
 w.on_game({"type": "game", "from": "SHA", "kind": "agent", "targets": ["Ada"], "game": lc})
 w.on_game({"type": "game", "from": "Ada", "kind": "agent", "targets": ["Ada", "SHA"], "game": dict(lc, tick=10)})
@@ -50,13 +36,15 @@ w.on_reaction({"type": "reaction", "id": 7, "from": "Ada", "targets": ["Ada"], "
 check(len(w.pending) == 3 and w.pending[-1]["kind"] == "reaction", "a reaction to our message passes; others don't")
 w.pending.clear()
 
-s19 = dict(g, id=19, turn=50, turn_of="Henry", last_move={"by": "Ada", "turn": 49},
-           players=[{"name": "Ada", "accepted": True, "placed": True}, {"name": "Henry", "accepted": True, "placed": True}])
-check(w.check_games([s19]) is False and not w.pending, "the first games read only records where games stand")
-w.on_game({"type": "game", "game": dict(s19, turn=51, turn_of="Ada", last_move={"by": "Henry", "turn": 50})})
+s19 = {"id": 19, "type": "battleship", "status": "running", "turn": 50, "targets": ["Henry"]}
+s20 = {"id": 20, "type": "newgame", "status": "running", "targets": ["Ada", "Jen"]}
+check(w.check_games([s19, s20]) is False and [p["body"]["game"]["id"] for p in w.pending] == [20],
+      "the first games read records where games stand, and wakes any game (of any type) that targets us")
 w.pending.clear()
-check(w.check_games([dict(s19, turn=51, turn_of="Ada")]) is False, "a summary that matches its last frame is fine")
-moved = dict(s19, turn=53, turn_of="Ada", last_move={"by": "Henry", "turn": 52})
+w.on_game({"type": "game", "from": "Henry", "targets": ["Ada"], "game": dict(s19, turn=51)})
+w.pending.clear()
+check(w.check_games([dict(s19, turn=51, targets=["Ada"]), s20]) is False, "a summary that matches its last frame is fine")
+moved = dict(s19, turn=53, targets=["Ada", "Henry"])
 check(w.check_games([moved]) is False and not w.pending, "one check behind isn't called stuck yet")
 check(w.check_games([moved]) is True and len(w.pending) == 1, "two checks behind: stuck, and the summary is woken")
 check(w.check_games([moved]) is False and len(w.pending) == 1, "the missed game isn't woken twice")

@@ -5,8 +5,8 @@ Holds one room stream open and posts each new item into the Muse main chat (or a
 through `musegadget send-user-msg`, as `[Agent Chat]` followed by one fenced code block per item, so the payload reads as
 data, not as the owner's words. The fence is longer than any run of backticks inside, so a message can't close it.
 Items: another member's message (its frame without room_state); a game or reaction frame whose "targets" name this
-member and whose "from" is someone else (the room's frame envelope); and, for a games-list summary, which has no
-envelope yet, a match this member plays, once per change, unless it only reflects this member's own move. room_state is never read: it's about the room's business
+member and whose "from" is someone else (the room's frame envelope; a games-list summary has its targets in the game
+and no "from"). The watcher knows no game's rules. room_state is never read: it's about the room's business
 (decisions, digests), not chat or play.
 
 Two cursors: `seen` (the stream's position) and `delivered` (the last message a send confirmed). A restart resumes from
@@ -48,7 +48,7 @@ USER_AGENT = "agent-chat-muse-gadget/3"
 lock = threading.Lock()
 check_now = threading.Event()
 state, pending = {}, []      # pending: [{"kind": "message"|"game", "id": message id or None, "body": dict}]
-frame_sig, game_sig, behind = {}, {}, {}   # game id -> its last frame's signature; last woken signature; checks behind
+frame_sig, behind = {}, {}   # game id -> its last frame's signature; checks the games list ran behind it
 games_seeded = False
 skipped = []                 # ids of messages dropped from an oversized backlog, named in the next wake
 first_at = None
@@ -72,24 +72,15 @@ def queue(kind, body, mid=None):
     first_at = first_at or time.monotonic()
 
 
-def gsig(g):
-    """What a game frame changes: who's to play, the phase, the result, a new tick (Light Cycles) or round (Duel), and
-    each seat's lobby, placement and life. Not a rival's queued move: that would wake for nothing."""
-    return json.dumps([g.get(k) for k in ("status", "phase", "turn", "turn_of", "tick", "round", "winner", "declined_by")]
-                      + [[p.get("accepted"), p.get("placed"), p.get("alive")]
-                         for p in g.get("players") or [] if isinstance(p, dict)])
+def targets_of(d):
+    """Who a game item is for: the frame envelope's targets, else (a games-list summary) the game's own."""
+    t = d.get("targets") if "targets" in d else (d.get("game") or {}).get("targets")
+    return [str(x) for x in t] if isinstance(t, list) else []
 
 
-def awaits_me(g):
-    """A running match waiting on this member: its turn (Battleship), or alive with no move queued for this tick
-    (Light Cycles)."""
-    me = state.get("self")
-    if g.get("status") != "running":
-        return False
-    if g.get("turn_of") is not None:
-        return g.get("turn_of") == me
-    seat = next((p for p in g.get("players") or [] if isinstance(p, dict) and p.get("name") == me), None)
-    return bool(seat) and "moved" in seat and seat.get("moved") is False and seat.get("alive") is not False
+def gsig(g, targets):
+    """Where a match stands, for noticing a frame the stream missed, in any game: status, result, and who it awaits."""
+    return json.dumps([g.get("status"), g.get("winner"), sorted(targets)])
 
 
 def on_message(d):
@@ -124,47 +115,32 @@ def on_reaction(d):
 
 
 def on_game(d):
-    """Under lock: queue a game frame. A frame with the envelope passes on targeted() alone. A summary without one
-    (the games list, read at start and when the stream is stuck) falls back to the rules below until the list carries
-    targets: a match this member plays, once per change, unless it only reflects this member's own move."""
+    """Under lock: queue a game item that targets this member and isn't of its own making. Stream frames carry the
+    envelope; a games-list summary (read at start and when the stream is stuck) has its targets in the game and no
+    "from", so it passes on targets alone. No game's rules are needed."""
     g = d.get("game") if isinstance(d.get("game"), dict) else {}
     gid, me = g.get("id"), state.get("self")
     if gid is None:
         return
-    sig = gsig(g)
-    frame_sig[gid] = sig
-    if "targets" in d:
-        if targeted(d):
-            game_sig[gid] = sig
-            queue("game", d)
-        return
-    if me not in [p.get("name") for p in g.get("players") or [] if isinstance(p, dict)]:
-        return
-    last = g.get("last_move") if isinstance(g.get("last_move"), dict) else {}
-    if g.get("status") == "running" and last.get("by") == me and g.get("turn_of") not in (None, me):
-        return
-    if g.get("status") == "running" and any(isinstance(p, dict) and p.get("name") == me and p.get("alive") is False
-                                            for p in g.get("players") or []):
-        return   # out of a Light Cycles match: its ticks go on without this member; the result still wakes
-    if game_sig.get(gid) == sig:
-        return
-    game_sig[gid] = sig
-    queue("game", d)
+    targets = targets_of(d)
+    frame_sig[gid] = gsig(g, targets)
+    if me in targets and str(d.get("from") or "") != me:
+        queue("game", d)
 
 
 def check_games(games):
     """Under lock: compare the games list with the frames seen. The first read records where each game stands, and
-    wakes a running match that waits on this member's move: frames are live-only, so one sent while the watcher was down
-    or its stream stuck is otherwise lost (2026-11-11: a Battleship move sat unwoken through a restart). A game whose
-    summary differs from its last frame on two checks running was missed: its summary is woken in the frame's place
-    (on_game filters it as usual). Returns True if any was missed (the stream is stuck)."""
+    wakes a match that targets this member: frames are live-only, so one sent while the watcher was down or its stream
+    stuck is otherwise lost (2026-11-11: a Battleship move sat unwoken through a restart). A game whose summary differs
+    from its last frame on two checks running was missed: its summary is woken in the frame's place (on_game filters it
+    as usual). Returns True if any was missed (the stream is stuck)."""
     global games_seeded
     stuck = False
     for g in games:
         if not isinstance(g, dict) or g.get("id") is None:
             continue
-        gid, sig = g["id"], gsig(g)
-        if not games_seeded and awaits_me(g):
+        gid, sig = g["id"], gsig(g, targets_of({"game": g}))
+        if not games_seeded and state.get("self") in targets_of({"game": g}):
             on_game({"type": "game", "game": g})   # sets frame_sig
             behind[gid] = 0
             continue
